@@ -8,7 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// Task представляет задачу с ее идентификатором, описанием, заметкой и связанными приложениями
+// Task представляет задачу с ее уникальным идентификатором, описанием, заметкой и списком связанных приложений.
 type Task struct {
 	ID           string   `json:"id"`
 	Description  string   `json:"description"`
@@ -16,127 +16,90 @@ type Task struct {
 	Applications []string `json:"applications"`
 }
 
-// tasks - это мапа, в которой хранятся наши задачи по их идентификаторам
-var tasks = map[string]Task{
-	"1": {
-		ID:          "1",
-		Description: "Сделать финальное задание темы REST API",
-		Note:        "Если сегодня сделаю, то завтра будет свободный день. Ура!",
-		Applications: []string{
-			"VS Code",
-			"Terminal",
-			"git",
-		},
-	},
-	"2": {
-		ID:          "2",
-		Description: "Протестировать финальное задание с помощью Postman",
-		Note:        "Лучше это делать в процессе разработки, каждый раз, когда запускаешь сервер и проверяешь хендлер",
-		Applications: []string{
-			"VS Code",
-			"Terminal",
-			"git",
-			"Postman",
-		},
-	},
-}
+// tasks - это мапа, в которой хранятся наши задачи. Ключом мапы является уникальный идентификатор задачи, а значением - сама структура Task.
+var tasks = map[string]Task{}
 
-// getTasks - функция для получения всех задач
+// getTasks - функция для получения списка всех задач.
+// Она кодирует мапу задач в формат JSON для отправки в ответ.
 func getTasks(w http.ResponseWriter, r *http.Request) {
-	// Установка заголовка Content-Type для ответа
-	w.Header().Set("Content-Type", "application/json")
-	// Установка статуса ответа - OK
-	w.WriteHeader(http.StatusOK)
-
-	// Кодирование мапы задач в JSON и отправка в ответ
 	if err := json.NewEncoder(w).Encode(tasks); err != nil {
-		// В случае ошибки кодируем и отправляем статус Internal Server Error
-		w.WriteHeader(http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 }
 
-// createTask - функция для создания новой задачи
+// createTask - функция для создания новой задачи.
+// Она декодирует JSON запрос в структуру Task, добавляет новую задачу в мапу,
+// кодирует созданную задачу в формат JSON для отправки в ответ.
 func createTask(w http.ResponseWriter, r *http.Request) {
-	// Декодирование JSON запроса в структуру Task
 	var task Task
 	if err := json.NewDecoder(r.Body).Decode(&task); err != nil {
-		// В случае ошибки отправляем статус Bad Request
-		w.WriteHeader(http.StatusBadRequest)
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	// Добавление новой задачи в мапу по ее идентификатору
+	// Проверяем, существует ли уже задача с таким идентификатором
+	if _, ok := tasks[task.ID]; ok {
+		http.Error(w, "Task with this ID already exists", http.StatusConflict)
+		return
+	}
+
 	tasks[task.ID] = task
 
-	// Установка заголовка Content-Type для ответа
-	w.Header().Set("Content-Type", "application/json")
-	// Установка статуса ответа - Created
-	w.WriteHeader(http.StatusCreated)
-
-	// Кодирование созданной задачи в JSON и отправка в ответ
 	if err := json.NewEncoder(w).Encode(task); err != nil {
-		// В случае ошибки кодируем и отправляем статус Internal Server Error
-		w.WriteHeader(http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 }
 
-// getTaskByID - функция для получения задачи по ее идентификатору
+// getTaskByID - функция для получения задачи по ее уникальному идентификатору.
+// Она получает идентификатор задачи из URL параметра, ищет задачу в мапе,
+// кодирует найденную задачу в формат JSON для отправки в ответ.
 func getTaskByID(w http.ResponseWriter, r *http.Request) {
-	// Получение идентификатора задачи из URL параметра
 	id := chi.URLParam(r, "id")
 	task, ok := tasks[id]
 
-	// Если задача с таким идентификатором не найдена, отправляем статус Not Found
 	if !ok {
-		w.WriteHeader(http.StatusNotFound)
+		http.Error(w, "Task not found", http.StatusNotFound)
 		return
 	}
 
-	// Установка заголовка Content-Type для ответа
-	w.Header().Set("Content-Type", "application/json")
-	// Установка статуса ответа - OK
-	w.WriteHeader(http.StatusOK)
-
-	// Кодирование найденной задачи в JSON и отправка в ответ
 	if err := json.NewEncoder(w).Encode(task); err != nil {
-		// В случае ошибки кодируем и отправляем статус Internal Server Error
-		w.WriteHeader(http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 }
 
-// deleteTaskByID - функция для удаления задачи по ее идентификатору
+// deleteTaskByID - функция для удаления задачи по ее уникальному идентификатору.
+// Она получает идентификатор задачи из URL параметра, ищет задачу в мапе, удаляет ее из мапы,
+// и отправляет статус OK в ответ на успешное удаление.
 func deleteTaskByID(w http.ResponseWriter, r *http.Request) {
-	// Получение идентификатора задачи из URL параметра
 	id := chi.URLParam(r, "id")
 	_, ok := tasks[id]
 
-	// Если задача с таким идентификатором не найдена, отправляем статус Not Found
 	if !ok {
-		w.WriteHeader(http.StatusNotFound)
+		http.Error(w, "Task not found", http.StatusNotFound)
 		return
 	}
 
-	// Удаление задачи из мапы по ее идентификатору
 	delete(tasks, id)
-
-	// Отправка статуса OK в ответ на успешное удаление
-	w.WriteHeader(http.StatusOK)
 }
 
 func main() {
-	// Инициализация роутера Chi
+	// Инициализация роутера Chi для обработки HTTP запросов.
 	r := chi.NewRouter()
 
-	// Регистрация хендлеров для различных маршрутов
+	// Регистрация хендлеров для различных маршрутов:
+	// - GET /tasks - получение списка всех задач
+	// - POST /tasks - создание новой задачи
+	// - GET /tasks/{id} - получение задачи по идентификатору
+	// - DELETE /tasks/{id} - удаление задачи по идентификатору
 	r.Get("/tasks", getTasks)
 	r.Post("/tasks", createTask)
 	r.Get("/tasks/{id}", getTaskByID)
 	r.Delete("/tasks/{id}", deleteTaskByID)
 
-	// Запуск HTTP сервера на порту 8080
+	// Запуск HTTP сервера на порту 8080.
 	if err := http.ListenAndServe(":8080", r); err != nil {
 		fmt.Printf("Ошибка при запуске сервера: %s", err.Error())
 		return
